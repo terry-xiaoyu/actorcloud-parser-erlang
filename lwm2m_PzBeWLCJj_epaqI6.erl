@@ -40,7 +40,7 @@ parse(_Topic, <<ProtoType:8, BusinessNO:16, Reserved:2, BusinessType:2, MsgType:
             msg_type => MsgType,
             content => Content,
             crc => CRC},
-  jsx:encode(Content).
+  Content.
 
 -spec(parse_content(Data :: binary()) -> {[map()], Remain :: binary()}).
 parse_content(Data) ->
@@ -204,16 +204,13 @@ parse_tlv(16#D005 = T, Len, Data) ->
 parse_tlv(16#D006 = T, Len, Data) ->
   <<Val:Len/binary, Remain/binary>> = Data,
   <<Flag:8/bits,
-    UEName:16/binary,
-    UEIMEI:16/binary,
-    UEIMSI:16/binary,
-    UEICCID:21/binary>> = Val,
+    String/binary>> = Val,
   MsgType = msg_type(T),
   Results = filter_by_flags(Flag, [?KEY(MsgType, "通信设备名称"),
                                    ?KEY(MsgType, "电话卡号"),
                                    ?KEY(MsgType, "模组串号"),
                                    ?KEY(MsgType, "电话卡物理号")],
-                                  [UEName, UEIMEI, UEIMSI, UEICCID], #{}),
+                                   null_terminated_strings(String), #{}),
   <<FlagInt:8/integer>> = Flag,
   {ok, Results#{?KEY(MsgType, "选项字节") => FlagInt}, Remain};
 
@@ -383,31 +380,32 @@ parse_tlv_d00_test_() ->
 parse_tlv_d06_test_() ->
   Flag1 = <<1:1, 1:1, 1:1, 1:1, 0:4>>,
   Flag2 = <<1:1, 0:1, 1:1, 0:1, 0:4>>,
-  UEName = <<"Shawn'sCellPhone">>,
-  UEIMEI = <<"1234567890123456">>,
-  UEIMSI = <<"1234567890123456">>,
+  UEName = <<"Shawn'sCellPhone", 0>>,
+  UEIMEI = <<"1234567890123456", 0>>,
+  UEIMSI = <<"1234567890123456", 0>>,
   UEICCID = <<"123456789012345678901">>,
+  Len = 1 + byte_size(UEName) + byte_size(UEIMEI) + byte_size(UEIMSI) + byte_size(UEICCID),
 [
   ?_assertEqual({ok, #{ utf8("物联网模组数据:选项字节") => 240,
-                        utf8("物联网模组数据:通信设备名称") => UEName,
-                        utf8("物联网模组数据:电话卡号") => UEIMEI,
-                        utf8("物联网模组数据:模组串号") => UEIMSI,
-                        utf8("物联网模组数据:电话卡物理号") => UEICCID}, <<>>},
-                  parse_tlv(16#D006, 70,
+                        utf8("物联网模组数据:通信设备名称") => <<"Shawn'sCellPhone">>,
+                        utf8("物联网模组数据:电话卡号") => <<"1234567890123456">>,
+                        utf8("物联网模组数据:模组串号") => <<"1234567890123456">>,
+                        utf8("物联网模组数据:电话卡物理号") => <<"123456789012345678901">>}, <<>>},
+                  parse_tlv(16#D006, Len,
                             <<Flag1:8/bits,
-                              UEName:16/binary,
-                              UEIMEI:16/binary,
-                              UEIMSI:16/binary,
-                              UEICCID:21/binary>>)),
+                              UEName/binary,
+                              UEIMEI/binary,
+                              UEIMSI/binary,
+                              UEICCID/binary>>)),
   ?_assertEqual({ok, #{ utf8("物联网模组数据:选项字节") => 160,
-                        utf8("物联网模组数据:通信设备名称") => UEName,
-                        utf8("物联网模组数据:模组串号") => UEIMSI}, <<>>},
-                  parse_tlv(16#D006, 70,
+                        utf8("物联网模组数据:通信设备名称") => <<"Shawn'sCellPhone">>,
+                        utf8("物联网模组数据:模组串号") => <<"1234567890123456">>}, <<>>},
+                  parse_tlv(16#D006, Len,
                             <<Flag2:8/bits,
-                              UEName:16/binary,
-                              UEIMEI:16/binary,
-                              UEIMSI:16/binary,
-                              UEICCID:21/binary>>))
+                              UEName/binary,
+                              UEIMEI/binary,
+                              UEIMSI/binary,
+                              UEICCID/binary>>))
 ].
 
 parse_test_() ->
@@ -433,17 +431,16 @@ parse_test_() ->
               AlertNum:2/integer-unit:8,
               CalculateTimeMs:4/integer-unit:8>>,
   Data = <<1:8, 155:16, 0:2, 2:2, 16#D000:12, Payload/binary, 3415:16>>,
-  [?_assertEqual(jsx:encode([#{
-                              utf8("震动数据:UTC时间") => UTC,
-                              utf8("震动数据:数据原因") => DataSrc,
-                              utf8("震动数据:是否使能报警") => bool(Enable),
-                              utf8("震动数据:震动阈值") => ActTh,
-                              utf8("震动数据:震动时间") => ActTime,
-                              utf8("震动数据:静止阈值") => InaTh,
-                              utf8("震动数据:静止时间") => InaTime,
-                              utf8("震动数据:报警周期") => AlertPeriodMin,
-                              utf8("震动数据:累计报警次数") => AlertNum,
-                              utf8("震动数据:累计解算时间") => CalculateTimeMs
-                            }]), parse(<<"ha">>, Data))].
+  [?_assertEqual([#{  utf8("震动数据:UTC时间") => UTC,
+                      utf8("震动数据:数据原因") => DataSrc,
+                      utf8("震动数据:是否使能报警") => bool(Enable),
+                      utf8("震动数据:震动阈值") => ActTh,
+                      utf8("震动数据:震动时间") => ActTime,
+                      utf8("震动数据:静止阈值") => InaTh,
+                      utf8("震动数据:静止时间") => InaTime,
+                      utf8("震动数据:报警周期") => AlertPeriodMin,
+                      utf8("震动数据:累计报警次数") => AlertNum,
+                      utf8("震动数据:累计解算时间") => CalculateTimeMs
+                    }], parse(<<"ha">>, Data))].
 
 -endif.
