@@ -81,7 +81,7 @@ on_load() ->
   emqx_actorcloud_parser_cli:on_parser_loaded(?MODULE).
 -endif.
 
--spec(parse(Object::binary(), Bin::binary()) -> string()).
+-spec(parse(Object::binary(), Bin::binary()) -> map() | string()).
 parse(_Object, <<ProtoType:8, BusinessNO:16, Reserved:2, BusinessType:2, FuncCode:12, Remain/binary>>) ->
   {Content, CRC} = parse_content(FuncCode, Remain),
   _Data = #{proto_type => ProtoType,
@@ -93,13 +93,13 @@ parse(_Object, <<ProtoType:8, BusinessNO:16, Reserved:2, BusinessType:2, FuncCod
             crc => CRC},
   Content.
 
--spec(unparse(Object::binary(), Json::string()) -> binary()).
+-spec(unparse(Object::binary(), Json::map()) -> binary()).
 unparse(_Object, Json) ->
   #{<<"version">> := Version,
     <<"req_no">> := ReqNo,
     <<"msg_type">> := MsgType,
     <<"func_no">> := FuncCode
-    } = jsx:decode(Json, [return_maps]),
+    } = Json,
   Data = <<Version:8, ReqNo:16, 0:2, MsgType:2, FuncCode:12>>,
   CRC16 = crc16(Data),
   <<Data/binary, CRC16:16>>.
@@ -111,15 +111,15 @@ parse_content(FunCode, Data) ->
   {do_parse_content(FunCode, Content), CRC16}.
 
 do_parse_content(16#D00, Data) ->
-  jsx:encode(parse_tlv_content(Data, []));
+  parse_tlv_content(Data, []);
 do_parse_content(16#D01, Json) ->
   Json;
 do_parse_content(16#D02, Text) ->
   Text;
 do_parse_content(16#C0E, LockResult) ->
-  jsx:encode(#{ok => bool(LockResult)});
+  #{ok => bool(LockResult)};
 do_parse_content(16#C0F, UnLockResult) ->
-  jsx:encode(#{ok => bool(UnLockResult)});
+  #{ok => bool(UnLockResult)};
 do_parse_content(_, Data) ->
   Data.
 
@@ -536,7 +536,7 @@ parse_test_() ->
                       utf8("震动数据:累计报警次数") => AlertNum,
                       utf8("震动数据:累计解算时间") => CalculateTimeMs
                     }],
-                    jsx:decode(parse(<<"ha">>, Data), [return_maps]))].
+                    parse(<<"ha">>, Data))].
 
 unparse_test() ->
   CmdLock = #{<<"version">> => 1,
@@ -544,7 +544,7 @@ unparse_test() ->
               <<"msg_type">> => 0,
               <<"func_no">> => 16#c0e}, 
   [
-    ?_assertEqual(<<1,0,1,12,14,50380:16>>, unparse(<<"ha">>, jsx:encode(CmdLock)))
+    ?_assertEqual(<<1,0,1,12,14,50380:16>>, unparse(<<"ha">>, CmdLock))
   ].
 
 -endif.
