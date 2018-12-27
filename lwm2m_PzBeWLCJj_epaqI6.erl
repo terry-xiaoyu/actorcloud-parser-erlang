@@ -524,7 +524,7 @@ parse_test_() ->
               AlertPeriodMin:2/integer-unit:8,
               AlertNum:2/integer-unit:8,
               CalculateTimeMs:4/integer-unit:8>>,
-  Data = <<1:8, 155:16, 0:2, 2:2, 16#D000:12, Payload/binary, 3415:16>>,
+  Data = <<1:8, 155:16, 0:2, 2:2, 16#D00:12, Payload/binary, 3415:16>>,
   [?_assertEqual([#{  utf8("震动数据:UTC时间") => UTC,
                       utf8("震动数据:数据原因") => DataSrc,
                       utf8("震动数据:是否使能报警") => bool(Enable),
@@ -535,6 +535,16 @@ parse_test_() ->
                       utf8("震动数据:报警周期") => AlertPeriodMin,
                       utf8("震动数据:累计报警次数") => AlertNum,
                       utf8("震动数据:累计解算时间") => CalculateTimeMs
-                    }], parse(<<"ha">>, Data))].
+                    }],
+                    jsx:decode(parse(<<"ha">>, Data), [return_maps]))].
+
+unparse_test() ->
+  CmdLock = #{<<"version">> => 1,
+              <<"req_no">> => 21,
+              <<"msg_type">> => 0,
+              <<"func_no">> => 16#c0e}, 
+  [
+    ?_assertEqual(<<1,0,1,12,14,50380:16>>, unparse(<<"ha">>, jsx:encode(CmdLock)))
+  ].
 
 -endif.
