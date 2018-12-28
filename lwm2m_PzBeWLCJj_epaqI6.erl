@@ -102,7 +102,7 @@ unparse(_Object, Json) ->
     } = Json,
   Data = <<Version:8, ReqNo:16, 0:2, MsgType:2, FuncCode:12>>,
   CRC16 = crc16(Data),
-  <<Data/binary, CRC16:16>>.
+  <<Data/binary, CRC16:16/little>>.
 
 -spec(parse_content(FunCode::integer(), Data :: binary()) -> {string(), CRC16 :: integer()}).
 parse_content(FunCode, Data) ->
