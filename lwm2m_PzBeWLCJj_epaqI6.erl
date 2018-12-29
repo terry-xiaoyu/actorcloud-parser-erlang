@@ -117,9 +117,9 @@ do_parse_content(16#D01, Json) ->
 do_parse_content(16#D02, Text) ->
   Text;
 do_parse_content(16#C0E, LockResult) ->
-  #{ok => bool(LockResult)};
+  [#{utf8("开锁成功") => bool(LockResult)}];
 do_parse_content(16#C0F, UnLockResult) ->
-  #{ok => bool(UnLockResult)};
+  [#{utf8("关锁成功") => bool(UnLockResult)}];
 do_parse_content(_, Data) ->
   Data.
 
@@ -133,6 +133,41 @@ parse_tlv_content(<<T:16, L:16, Data/binary>>, ContentList) when L > 0,
       parse_tlv_content(Remain, ContentList)
   end;
 parse_tlv_content(<<>>, ContentList) -> ContentList.
+
+parse_tlv(16#0 = T, Len, Data) ->
+  <<Val:Len/binary, Remain/binary>> = Data,
+  <<UTC:4/integer-unit:8,
+    DataSrc:1/integer-unit:8,
+    EvNum:1/integer-unit:8,
+    HdVer:1/integer-unit:8,
+    SfVer:1/integer-unit:8,
+    Heart:1/integer-unit:8,
+    Pole:1/integer-unit:8,
+    AutoLockTimeMin:2/integer-unit:8,
+    UnlockAlarmTimeMin:2/integer-unit:8,
+    LockShakeCloseTimeSec:2/integer-unit:8,
+    ErrComCount:2/integer-unit:8,
+    ErrHeartCount:2/integer-unit:8,
+    ErrResetCount:2/integer-unit:8,
+    ErrPoleOpenCount:2/integer-unit:8,
+    LockCount:4/integer-unit:8>> = Val,
+  MsgType = msg_type(T),
+  {ok, #{ ?KEY(MsgType, "UTC时间") => UTC,
+          ?KEY(MsgType, "数据原因") => DataSrc,
+          ?KEY(MsgType, "事件编码") => EvNum,
+          ?KEY(MsgType, "硬件版本") => HdVer,
+          ?KEY(MsgType, "软件版本") => SfVer,
+          ?KEY(MsgType, "锁舌状态") => Heart,
+          ?KEY(MsgType, "锁杆状态") => Pole,
+          ?KEY(MsgType, "自动落锁时间") => AutoLockTimeMin,
+          ?KEY(MsgType, "未上锁报警时间") => UnlockAlarmTimeMin,
+          ?KEY(MsgType, "上锁后关闭震动时间") => LockShakeCloseTimeSec,
+          ?KEY(MsgType, "产生通信错误次数") => ErrComCount,
+          ?KEY(MsgType, "锁舌故障产生次数") => ErrHeartCount,
+          ?KEY(MsgType, "电机板复位次数") => ErrResetCount,
+          ?KEY(MsgType, "内部打开次数") => ErrPoleOpenCount,
+          ?KEY(MsgType, "开关锁次数") => LockCount
+        }, Remain};
 
 parse_tlv(16#D000 = T, Len, Data) ->
   <<Val:Len/binary, Remain/binary>> = Data,
@@ -354,6 +389,7 @@ filter_by_flags(<<0:1, RFlags/bits>>, [_K|Ks], [_V|Vs], ResultMap) ->
 filter_by_flags(<<1:1, RFlags/bits>>, [K|Ks], [V|Vs], ResultMap) ->
   filter_by_flags(RFlags, Ks, Vs, ResultMap#{K => V}).
 
+msg_type(16#0) -> "锁数据";
 msg_type(16#D000) -> "震动数据";
 msg_type(16#D001) -> "震动唤醒数据";
 msg_type(16#D002) -> "倾角数据";
